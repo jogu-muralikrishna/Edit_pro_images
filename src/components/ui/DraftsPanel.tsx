@@ -167,7 +167,14 @@ export const DraftsPanel: React.FC<DraftsPanelProps> = ({ onLoadProject, canvas 
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               className="group relative bg-[#121212] border border-white/5 hover:border-purple-500/30 rounded-2xl p-4 transition-all duration-300 cursor-pointer overflow-hidden flex gap-4"
-              onClick={() => onLoadProject(JSON.parse(draft.data))}
+              onClick={() => {
+                try {
+                  onLoadProject(JSON.parse(draft.data));
+                } catch (e) {
+                  console.error("Failed to load project data:", e);
+                  alert("This project data appears to be corrupted. Could not load.");
+                }
+              }}
             >
               {draft.preview && (
                 <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-white/5 border border-white/10">

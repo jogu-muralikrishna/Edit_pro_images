@@ -40,6 +40,7 @@ service cloud.firestore {
       return data.keys().hasAll(['name', 'data', 'userId', 'createdAt', 'updatedAt']) &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 256 &&
              data.data is string && data.data.size() <= 1048576 && // 1MB limit check
+             (data.preview == null || (data.preview is string && data.preview.size() <= 102400)) && // 100KB limit for preview
              data.userId == request.auth.uid &&
              data.createdAt is timestamp &&
              data.updatedAt == request.time;

@@ -109,11 +109,15 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 async function testConnection() {
   if (!isConfigValid) return;
   try {
-    const connDoc = doc(db, 'test', 'connection');
-    await getDocFromServer(connDoc);
-  } catch (error) {
-    if(error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
+    // Try to list a collection that exists in rules but requires auth
+    // This will fail if not signed in, which is fine
+    const q = query(collection(db, 'projects'), where('userId', '==', 'test'), orderBy('updatedAt', 'desc'));
+    await getDocs(q);
+  } catch (error: any) {
+    // We only care if it's a structural failure (like project-not-found or invalid-config)
+    const errStr = String(error);
+    if (errStr.includes('The project') || errStr.includes('API key') || errStr.includes('offline')) {
+      console.warn("Firebase Connection Warning:", errStr.includes('offline') ? "Client is offline or network blocked." : "Check your Firebase project settings.");
     }
   }
 }
