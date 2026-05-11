@@ -1,0 +1,55 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information mirrored from Firebase Auth.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "createdAt"]
+    },
+    "Project": {
+      "title": "Design Project",
+      "description": "A design project containing canvas state.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "data": { "type": "string", "description": "JSON string of Fabric.js canvas state" },
+        "preview": { "type": "string", "description": "Base64 or URL" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "data", "userId", "createdAt", "updatedAt"]
+    },
+    "Template": {
+      "title": "Design Template",
+      "description": "Pre-built templates for users to start from.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "previewUrl": { "type": "string" },
+        "canvasData": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "category", "previewUrl", "canvasData", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "Public and private user profiles."
+    },
+    "projects/{projectId}": {
+      "schema": "Project",
+      "description": "User designs."
+    },
+    "templates/{templateId}": {
+      "schema": "Template",
+      "description": "Global templates accessible to all."
+    }
+  }
+}
