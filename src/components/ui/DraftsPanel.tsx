@@ -166,28 +166,35 @@ export const DraftsPanel: React.FC<DraftsPanelProps> = ({ onLoadProject, canvas 
               key={draft.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="group relative bg-white/[0.02] border border-white/5 hover:border-purple-500/30 rounded-2xl p-4 transition-all duration-300 cursor-pointer overflow-hidden"
+              className="group relative bg-[#121212] border border-white/5 hover:border-purple-500/30 rounded-2xl p-4 transition-all duration-300 cursor-pointer overflow-hidden flex gap-4"
               onClick={() => onLoadProject(JSON.parse(draft.data))}
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-[11px] font-bold text-white mb-1 group-hover:text-purple-400 transition-colors">
-                    {draft.name || 'Untitled Project'}
-                  </h3>
-                  <div className="flex items-center gap-2 text-[9px] text-gray-500 uppercase tracking-tighter">
-                    <Clock size={10} />
-                    {draft.updatedAt instanceof Timestamp ? draft.updatedAt.toDate().toLocaleDateString() : 'Recently'}
-                  </div>
+              {draft.preview && (
+                <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-white/5 border border-white/10">
+                  <img src={draft.preview} alt="Preview" className="w-full h-full object-cover" />
                 </div>
-                <div className="flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button 
-                    onClick={(e) => handleDelete(e, draft.id)}
-                    className="p-1.5 bg-rose-500/10 text-rose-400/50 hover:text-rose-400 rounded-lg transition-colors border border-rose-500/0 hover:border-rose-500/20"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                  <div className="p-1.5 text-purple-400">
-                    <ExternalLink size={12} />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="text-[11px] font-bold text-white mb-1 group-hover:text-purple-400 transition-colors truncate">
+                      {draft.name || 'Untitled Project'}
+                    </h3>
+                    <div className="flex items-center gap-2 text-[9px] text-gray-500 uppercase tracking-tighter">
+                      <Clock size={10} />
+                      {draft.updatedAt instanceof Timestamp ? draft.updatedAt.toDate().toLocaleDateString() : 'Recently'}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={(e) => handleDelete(e, draft.id)}
+                      className="p-1.5 bg-rose-500/10 text-rose-400/50 hover:text-rose-400 rounded-lg transition-colors border border-rose-500/0 hover:border-rose-500/20"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                    <div className="p-1.5 text-purple-400">
+                      <ExternalLink size={12} />
+                    </div>
                   </div>
                 </div>
               </div>

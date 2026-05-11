@@ -10,18 +10,21 @@ export const AIPanel: React.FC<AIPanelProps> = ({ onAddImage }) => {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
     setLoading(true);
+    setError(null);
     try {
       const url = await generateAIImage(prompt);
       onAddImage(url);
       setHistory([url, ...history]);
       setPrompt('');
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      setError(error.message || "Failed to generate image. Please check your Gemini API key.");
     } finally {
       setLoading(false);
     }
@@ -30,11 +33,13 @@ export const AIPanel: React.FC<AIPanelProps> = ({ onAddImage }) => {
   const handleEnhance = async () => {
     if (!prompt.trim()) return;
     setEnhancing(true);
+    setError(null);
     try {
       const enhanced = await enhancePrompt(prompt);
       setPrompt(enhanced);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      setError("Failed to enhance prompt. Check your connection.");
     } finally {
       setEnhancing(false);
     }
@@ -48,6 +53,11 @@ export const AIPanel: React.FC<AIPanelProps> = ({ onAddImage }) => {
       </div>
 
       <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-4 focus-within:border-purple-500/50 transition-colors">
+        {error && (
+          <div className="mb-3 p-2 bg-red-500/10 border border-red-500/20 rounded-lg text-[9px] text-red-400 font-medium text-center">
+            {error}
+          </div>
+        )}
         <div className="relative">
           <textarea
             value={prompt}

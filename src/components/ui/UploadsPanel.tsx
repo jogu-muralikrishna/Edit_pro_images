@@ -20,6 +20,7 @@ export const UploadsPanel: React.FC<UploadsPanelProps> = ({ onAddImage }) => {
   const [activeFile, setActiveFile] = useState<UploadedFile | null>(null);
   const [prompt, setPrompt] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,12 +68,14 @@ export const UploadsPanel: React.FC<UploadsPanelProps> = ({ onAddImage }) => {
   const handleAIRefine = async () => {
     if (!activeFile || !prompt) return;
     setIsProcessing(true);
+    setError(null);
     try {
       const newImageUrl = await editImageWithAI(activeFile.url, prompt);
       onAddImage(newImageUrl);
       setPrompt('');
-    } catch (error) {
+    } catch (error: any) {
       console.error("AI Refine Error:", error);
+      setError(error.message || "AI was unable to refine this image. Ensure your GEMINI_API_KEY is correctly set.");
     } finally {
       setIsProcessing(false);
     }
@@ -81,11 +84,13 @@ export const UploadsPanel: React.FC<UploadsPanelProps> = ({ onAddImage }) => {
   const handleRemoveBG = async () => {
     if (!activeFile) return;
     setIsProcessing(true);
+    setError(null);
     try {
       const newImageUrl = await removeBackground(activeFile.url);
       onAddImage(newImageUrl);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Remove BG Error:", error);
+      setError(error.message || "Background removal failed. This feature requires a Gemini API key.");
     } finally {
       setIsProcessing(false);
     }
@@ -172,10 +177,16 @@ export const UploadsPanel: React.FC<UploadsPanelProps> = ({ onAddImage }) => {
                   <Sparkles size={14} className="text-purple-400" />
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-white">AI Edit Center</h3>
                 </div>
-                <button onClick={() => setActiveFile(null)} className="text-gray-500 hover:text-white">
+                <button onClick={() => { setActiveFile(null); setError(null); }} className="text-gray-500 hover:text-white">
                   <X size={14} />
                 </button>
               </div>
+
+              {error && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                  <p className="text-[9px] text-red-400 font-medium leading-relaxed">{error}</p>
+                </div>
+              )}
 
               <div className="flex gap-2">
                 <button 

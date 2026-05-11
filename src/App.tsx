@@ -123,9 +123,16 @@ export default function App() {
     if (!canvas || !user) return;
     const projectId = `proj-${Date.now()}`;
     try {
+      // Generate a small preview dataURL for the history view
+      const preview = canvas.toDataURL({ format: 'webp', quality: 0.5, multiplier: 0.1 });
+      
       await setDoc(doc(db, 'projects', projectId), {
-        name: projectName, data: JSON.stringify(canvas.toJSON()),
-        userId: user.uid, updatedAt: serverTimestamp(), createdAt: serverTimestamp(),
+        name: projectName, 
+        data: JSON.stringify(canvas.toJSON()),
+        preview,
+        userId: user.uid, 
+        updatedAt: serverTimestamp(), 
+        createdAt: serverTimestamp(),
       });
       alert('Project saved successfully!');
     } catch (error) {
@@ -139,7 +146,7 @@ export default function App() {
       const dataURL = canvas.toDataURL({ 
         format: format === 'pdf' ? 'png' : format as any, 
         quality: 1,
-        multiplier: 2 // Added required multiplier for high-res export
+        multiplier: 2 
       });
       const link = document.createElement('a');
       link.download = `${projectName}.${format}`;
@@ -227,7 +234,10 @@ export default function App() {
                                    const originalUrl = selectedObject.src || selectedObject.getSrc();
                                    try {
                                      const newUrl = await removeBackground(originalUrl);
-                                     selectedObject.setSrc(newUrl, () => canvas?.renderAll());
+                                     if (selectedObject instanceof fabric.FabricImage) {
+                                       await selectedObject.setSrc(newUrl);
+                                       canvas?.renderAll();
+                                     }
                                    } catch (e) { console.error(e); }
                                  }}
                                  className="w-full py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-xl text-[10px] font-bold uppercase tracking-widest text-purple-300 transition-all shadow-[0_0_15px_rgba(168,85,247,0.1)]"
@@ -252,7 +262,10 @@ export default function App() {
                                        const originalUrl = selectedObject.src || selectedObject.getSrc();
                                        try {
                                           const newUrl = await editImageWithAI(originalUrl, `Professionally edit this image: ${p}. Maintain the original subject while applying the requested change in high definition.`);
-                                          selectedObject.setSrc(newUrl, () => canvas?.renderAll());
+                                          if (selectedObject instanceof fabric.FabricImage) {
+                                            await selectedObject.setSrc(newUrl);
+                                            canvas?.renderAll();
+                                          }
                                           input.value = '';
                                        } catch (e) { console.error(e); }
                                      }}
