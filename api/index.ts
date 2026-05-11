@@ -18,13 +18,22 @@ app.get('/api/stock/unsplash', async (req, res) => {
   const { query, page = 1 } = req.query;
   const accessKey = process.env.UNSPLASH_ACCESS_KEY;
   
-  if (!accessKey) return res.status(500).json({ error: 'Unsplash key missing' });
+  if (!accessKey) {
+    console.error('UNSPLASH_ACCESS_KEY is not set');
+    return res.status(500).json({ error: 'Unsplash API key is missing. Please check your environment variables.' });
+  }
 
   try {
-    const response = await fetch(`https://api.unsplash.com/search/photos?query=${query}&page=${page}&per_page=20&client_id=${accessKey}`);
+    const response = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(query as string)}&page=${page}&per_page=20&client_id=${accessKey}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Unsplash API Error:', errorText);
+      return res.status(response.status).json({ error: 'Unsplash API returned an error' });
+    }
     const data = await response.json();
     res.json(data);
   } catch (error: any) {
+    console.error('Unsplash Proxy Error:', error);
     res.status(500).json({ error: 'Failed to fetch from Unsplash' });
   }
 });
@@ -34,15 +43,24 @@ app.get('/api/stock/pexels', async (req, res) => {
   const { query, page = 1 } = req.query;
   const apiKey = process.env.PEXELS_API_KEY;
 
-  if (!apiKey) return res.status(500).json({ error: 'Pexels key missing' });
+  if (!apiKey) {
+    console.error('PEXELS_API_KEY is not set');
+    return res.status(500).json({ error: 'Pexels API key is missing. Please check your environment variables.' });
+  }
 
   try {
-    const response = await fetch(`https://api.pexels.com/v1/search?query=${query}&page=${page}&per_page=20`, {
+    const response = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(query as string)}&page=${page}&per_page=20`, {
       headers: { Authorization: apiKey as string }
     });
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Pexels API Error:', errorText);
+      return res.status(response.status).json({ error: 'Pexels API returned an error' });
+    }
     const data = await response.json();
     res.json(data);
   } catch (error: any) {
+    console.error('Pexels Proxy Error:', error);
     res.status(500).json({ error: 'Failed to fetch from Pexels' });
   }
 });

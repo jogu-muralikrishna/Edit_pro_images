@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Image as ImageIcon, Video, Loader2, Plus, ArrowRight, Grid, LayoutGrid } from 'lucide-react';
+import { Search, Image as ImageIcon, Video, Loader2, Plus, ArrowRight, Grid, LayoutGrid, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../lib/utils';
 
@@ -13,6 +13,7 @@ export const StockPanel: React.FC<StockPanelProps> = ({ onAddMedia }) => {
   const [source, setSource] = useState<'unsplash' | 'pexels'>('unsplash');
   const [results, setResults] = useState<any[]>([]);
   const [trending, setTrending] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Load trending images on mount
@@ -22,6 +23,7 @@ export const StockPanel: React.FC<StockPanelProps> = ({ onAddMedia }) => {
   const fetchTrending = async () => {
     try {
       const resp = await fetch(`/api/stock/unsplash?query=aesthetic&page=1`);
+      if (!resp.ok) return;
       const data = await resp.json();
       if (data.results) setTrending(data.results);
     } catch (e) {
@@ -32,10 +34,15 @@ export const StockPanel: React.FC<StockPanelProps> = ({ onAddMedia }) => {
   const handleSearch = async () => {
     if (!query.trim()) return;
     setLoading(true);
+    setError(null);
     try {
       const endpoint = source === 'unsplash' ? '/api/stock/unsplash' : '/api/stock/pexels';
       const resp = await fetch(`${endpoint}?query=${encodeURIComponent(query)}&page=1`);
       const data = await resp.json();
+      
+      if (!resp.ok) {
+        throw new Error(data.error || 'Stock search failed');
+      }
       
       let processed = [];
       if (source === 'unsplash') {
@@ -121,6 +128,19 @@ export const StockPanel: React.FC<StockPanelProps> = ({ onAddMedia }) => {
             >
               <Loader2 className="animate-spin text-purple-500" size={32} />
               <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Searching global library...</p>
+            </motion.div>
+          ) : error ? (
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="flex flex-col items-center justify-center py-20 px-10 text-center gap-4"
+            >
+              <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500">
+                <X size={24} />
+              </div>
+              <p className="text-xs text-red-400 font-medium">{error}</p>
+              <p className="text-[9px] text-gray-500 leading-relaxed">
+                Ensure your <b>UNSPLASH_ACCESS_KEY</b> and <b>PEXELS_API_KEY</b> are correctly set in environment variables.
+              </p>
             </motion.div>
           ) : results.length > 0 ? (
             <motion.div 

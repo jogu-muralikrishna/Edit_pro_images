@@ -4,39 +4,56 @@ import { getFirestore, doc, getDocFromServer, collection, query, where, getDocs,
 
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
-// Handle configuration for both AI Studio preview and standalone production
-const firebaseConfig = {
-  apiKey: (import.meta as any).env.VITE_FIREBASE_API_KEY || firebaseAppletConfig.apiKey,
-  authDomain: (import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN || firebaseAppletConfig.authDomain,
-  projectId: (import.meta as any).env.VITE_FIREBASE_PROJECT_ID || firebaseAppletConfig.projectId,
-  storageBucket: (import.meta as any).env.VITE_FIREBASE_STORAGE_BUCKET || firebaseAppletConfig.storageBucket,
-  messagingSenderId: (import.meta as any).env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseAppletConfig.messagingSenderId,
-  appId: (import.meta as any).env.VITE_FIREBASE_APP_ID || firebaseAppletConfig.appId,
-  firestoreDatabaseId: (import.meta as any).env.VITE_FIREBASE_DATABASE_ID || firebaseAppletConfig.firestoreDatabaseId || '(default)'
+// Configuration helper to avoid top-level crashes
+const getFirebaseConfig = () => {
+  try {
+    return {
+      apiKey: (import.meta as any).env.VITE_FIREBASE_API_KEY || firebaseAppletConfig.apiKey,
+      authDomain: (import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN || firebaseAppletConfig.authDomain,
+      projectId: (import.meta as any).env.VITE_FIREBASE_PROJECT_ID || firebaseAppletConfig.projectId,
+      storageBucket: (import.meta as any).env.VITE_FIREBASE_STORAGE_BUCKET || firebaseAppletConfig.storageBucket,
+      messagingSenderId: (import.meta as any).env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseAppletConfig.messagingSenderId,
+      appId: (import.meta as any).env.VITE_FIREBASE_APP_ID || firebaseAppletConfig.appId,
+      firestoreDatabaseId: (import.meta as any).env.VITE_FIREBASE_DATABASE_ID || firebaseAppletConfig.firestoreDatabaseId || '(default)'
+    };
+  } catch (e) {
+    return {} as any;
+  }
 };
 
-// Defensive check to avoid Firebase crashing the whole app on boot if config is partial
-const isConfigValid = firebaseConfig.apiKey && firebaseConfig.apiKey !== 'YOUR_API_KEY';
+const firebaseConfig = getFirebaseConfig();
 
-let app;
+// Defensive check to avoid Firebase crashing the whole app on boot if config is partial
+const isConfigValid = !!(firebaseConfig.apiKey && firebaseConfig.apiKey !== 'YOUR_API_KEY');
+
+let app: any;
+let db: any;
+let auth: any;
+
 try {
-  if (!isConfigValid) {
-    console.warn("Firebase config is missing or invalid. Some features will be disabled.");
-    // Initialize with dummy values to avoid immediate crash, or just catch the error
+  if (isConfigValid) {
+    app = initializeApp(firebaseConfig);
+    db = getFirestore(app, firebaseConfig.firestoreDatabaseId === '(default)' ? undefined : firebaseConfig.firestoreDatabaseId);
+    auth = getAuth(app);
+  } else {
+    throw new Error("Missing Firebase Configuration");
   }
-  app = initializeApp(firebaseConfig);
 } catch (e) {
-  console.error("Firebase Initialization Error:", e);
-  // Fallback to avoid breaking the module exports
-  app = { 
-    options: {}, 
-    name: '[DEFAULT]', 
-    automaticDataCollectionEnabled: false 
-  } as any;
+  console.warn("Firebase could not be initialized. Please check your environment variables.", e);
+  // Provide safe mocks that don't crash on boot but will fail gracefully when used
+  app = { name: '[DEFAULT]', options: {} };
+  db = { type: 'firestore' }; 
+  auth = { 
+    currentUser: null,
+    onAuthStateChanged: (cb: any) => { 
+      console.warn("Auth ignored: Missing config");
+      return () => {}; 
+    },
+    signOut: () => Promise.resolve()
+  };
 }
 
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId === '(default)' ? undefined : firebaseConfig.firestoreDatabaseId);
-export const auth = getAuth(app);
+export { app, db, auth };
 export const googleProvider = new GoogleAuthProvider();
 export { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile };
 
@@ -90,8 +107,10 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 // Connection test
 async function testConnection() {
+  if (!isConfigValid) return;
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    const connDoc = doc(db, 'test', 'connection');
+    await getDocFromServer(connDoc);
   } catch (error) {
     if(error instanceof Error && error.message.includes('the client is offline')) {
       console.error("Please check your Firebase configuration.");

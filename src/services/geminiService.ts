@@ -30,6 +30,7 @@
        ctx?.drawImage(img, 0, 0, width, height);
        resolve(canvas.toDataURL('image/png', 0.8));
      };
+     img.onerror = () => resolve(dataUrl);
      img.src = dataUrl;
    });
  };
@@ -156,3 +157,4 @@
      return [];
    }
  };
+

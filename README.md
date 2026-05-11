@@ -2,34 +2,30 @@
 
 A professional-grade AI design tool with deep Gemini integration, Unsplash/Pexels support, and cloud syncing via Firebase.
 
-## 🚀 Deployment to Vercel (Step-by-Step)
+## 🚀 How to fix the "Black Page" on Vercel
 
-If you see a **Black Page** or **Firebase Error** on Vercel, follow these steps exactly:
+If your app shows a black page after deploying to Vercel, it is almost certainly because **Firebase** or **Gemini** API keys are missing. I have added a safety fix to prevent the app from crashing entirely, but following these steps will make it functional:
 
-### 1. Configure Vercel Dashboard
-1. Go to your project on [Vercel](https://vercel.com).
-2. Go to **Settings > General**.
-3. **Framework Preset**: Should be **Vite**.
-4. **Root Directory**: Leave as is (or `.` ).
-5. **Output Directory**: Ensure it is set to `dist` (default for Vite).
+### 1. Add Environment Variables in Vercel
+Go to **Settings > Environment Variables** and add these (case-sensitive):
+- `GEMINI_API_KEY`: Your key from Google AI Studio.
+- `VITE_FIREBASE_API_KEY`: From your Firebase project instructions.
+- `VITE_FIREBASE_AUTH_DOMAIN`: e.g. `your-project.firebaseapp.com`
+- `VITE_FIREBASE_PROJECT_ID`: e.g. `your-project`
+- `VITE_FIREBASE_STORAGE_BUCKET`: e.g. `your-project.firebasestorage.app`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`: (numeric ID)
+- `VITE_FIREBASE_APP_ID`: (long ID)
 
-### 2. Set Environment Variables
-Go to **Settings > Environment Variables** and add:
-- `GEMINI_API_KEY`: (Get from AI Studio)
-- `UNSPLASH_ACCESS_KEY`: (Optional, for stock photos)
-- `PEXELS_API_KEY`: (Optional, for videos/photos)
-- **Firebase Keys** (Copy these from `firebase-applet-config.json`):
-  - `VITE_FIREBASE_API_KEY`
-  - `VITE_FIREBASE_AUTH_DOMAIN`
-  - `VITE_FIREBASE_PROJECT_ID`
-  - `VITE_FIREBASE_STORAGE_BUCKET`
-  - `VITE_FIREBASE_MESSAGING_SENDER_ID`
-  - `VITE_FIREBASE_APP_ID`
+### 2. Verify Vercel Build Settings
+Ensure your Vercel project settings are:
+- **Framework Preset**: `Vite`
+- **Build Command**: `vite build`
+- **Output Directory**: `dist`
 
-### 3. Troubleshooting "Black Page"
-- **Reason 1: Missing API Keys**: If Firebase doesn't find an API key, it might crash the app on boot. I've added a fix to prevent the crash, but you must still provide the keys for it to work.
-- **Reason 2: Routing**: If you get a 404 on refresh, `vercel.json` is already configured to handle SPA routing.
-- **Reason 3: Mixed Content**: Ensure all API calls use the `/api/...` prefix which is proxied securely.
+### 3. Why it was a Black Page
+The app was previously crashing during boot because Firebase requires an API key to even start its service. If the key was missing on Vercel, the whole Javascript bundle would stop executing. 
+
+**I have now patched this:** The app will now show a warning in the console but **will still render the UI** even if the keys are missing. Features like "Save Project" and "Login" will show a warning instead of crashing.
 
 ## 🛠 Local Development
 

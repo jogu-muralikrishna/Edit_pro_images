@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Upload, Trash2, Wand2, Eraser, Plus, Image as ImageIcon, Sparkles, X, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../lib/utils';
-import { generateAIImage, editImageWithAI } from '../../services/geminiService';
+import { generateAIImage, editImageWithAI, removeBackground } from '../../services/geminiService';
 
 interface UploadsPanelProps {
   onAddImage: (url: string) => void;
@@ -27,7 +27,10 @@ export const UploadsPanel: React.FC<UploadsPanelProps> = ({ onAddImage }) => {
     if (!uploadedFiles) return;
 
     setIsUploading(true);
-    Array.from(uploadedFiles).forEach(file => {
+    const filesArray = Array.from(uploadedFiles);
+    let loadedCount = 0;
+
+    filesArray.forEach(file => {
       const reader = new FileReader();
       reader.onload = (event) => {
         const newFile = {
@@ -35,12 +38,25 @@ export const UploadsPanel: React.FC<UploadsPanelProps> = ({ onAddImage }) => {
           url: event.target?.result as string,
           name: file.name
         };
-        setFiles(prev => [newFile, ...prev]);
-        if (files.length === 0) setActiveFile(newFile);
+        
+        setFiles(prev => {
+          const updated = [newFile, ...prev];
+          // Set active file if it's the first one being added or currently none is active
+          if (!activeFile && updated.length > 0) setActiveFile(newFile);
+          return updated;
+        });
+
+        loadedCount++;
+        if (loadedCount === filesArray.length) {
+          setIsUploading(false);
+        }
+      };
+      reader.onerror = () => {
+        loadedCount++;
+        if (loadedCount === filesArray.length) setIsUploading(false);
       };
       reader.readAsDataURL(file);
     });
-    setIsUploading(false);
   };
 
   const removeFile = (id: string) => {
@@ -66,8 +82,7 @@ export const UploadsPanel: React.FC<UploadsPanelProps> = ({ onAddImage }) => {
     if (!activeFile) return;
     setIsProcessing(true);
     try {
-      const bgRemovePrompt = "Remove the background of this image. Preserve the main subject exactly as it is, but replace the background with a pure white background. Return only the edited image.";
-      const newImageUrl = await editImageWithAI(activeFile.url, bgRemovePrompt);
+      const newImageUrl = await removeBackground(activeFile.url);
       onAddImage(newImageUrl);
     } catch (error) {
       console.error("Remove BG Error:", error);
