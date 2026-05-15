@@ -31,27 +31,38 @@ console.log(`[Firebase] Initializing Firestore with Database ID: ${firestoreDbId
 // Defensive check to avoid Firebase crashing the whole app on boot if config is partial
 const isConfigValid = firebaseConfig.apiKey && firebaseConfig.apiKey !== 'YOUR_API_KEY';
 
-let app;
+let app: any;
+let db: any;
+let auth: any;
+
 try {
   if (getApps().length > 0) {
     app = getApp();
   } else {
     if (!isConfigValid) {
-      console.warn("Firebase config is missing or invalid. Some features will be disabled.");
+      console.warn("Firebase config is missing or invalid. Check your environment variables.");
     }
     app = initializeApp(firebaseConfig);
   }
+  db = getFirestore(app, firestoreDbId);
+  auth = getAuth(app);
 } catch (e) {
   console.error("Firebase Initialization Error:", e);
-  app = { 
-    options: {}, 
-    name: '[DEFAULT]', 
-    automaticDataCollectionEnabled: false 
-  } as any;
+  // Provide safe fallback objects that don't crash the app on component mount
+  const mockDb = { 
+    collection: () => ({ doc: () => ({ onSnapshot: (cb: any) => () => {}, get: async () => ({ exists: () => false }) }) }),
+    type: 'mock'
+  };
+  const mockAuth = { 
+    onAuthStateChanged: (cb: any) => { cb(null); return () => {}; },
+    currentUser: null,
+    type: 'mock'
+  };
+  db = mockDb;
+  auth = mockAuth;
 }
 
-export const db = getFirestore(app, firestoreDbId);
-export const auth = getAuth(app);
+export { db, auth };
 
 // Enable persistence for offline support
 if (typeof window !== 'undefined' && isConfigValid) {
