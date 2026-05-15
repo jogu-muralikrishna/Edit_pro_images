@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layout, Palette, Phone, Send, Twitter, Youtube, Sparkles, Filter, Search, Bookmark, ArrowRight, Star, TrendingUp, Clock, Zap } from 'lucide-react';
+import { Layout, Palette, Phone, Send, MessageSquare, Video, Sparkles, Filter, Search, Bookmark, ArrowRight, Star, TrendingUp, Clock, Zap } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../../lib/utils';
 
@@ -12,7 +12,7 @@ const TEMPLATE_CATEGORIES = [
   { id: 'indian', name: 'Traditional Indian', icon: Palette },
   { id: 'creative', name: 'Creative Styles', icon: Sparkles },
   { id: 'social', name: 'Social Media', icon: Phone },
-  { id: 'movie', name: 'Movie Poster', icon: Youtube },
+  { id: 'movie', name: 'Movie Poster', icon: Video },
 ];
 
 const TEMPLATES_DATA = [

@@ -1,5 +1,3 @@
-import * as fabric from 'fabric';
-
 export interface ShapeDefinition {
   name: string;
   type: string;

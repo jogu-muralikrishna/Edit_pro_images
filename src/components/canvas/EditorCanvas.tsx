@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import * as fabric from 'fabric';
+import { Canvas, IText } from 'fabric';
 
 interface EditorCanvasProps {
-  onCanvasReady: (canvas: fabric.Canvas) => void;
+  onCanvasReady: (canvas: Canvas) => void;
 }
 
 export const EditorCanvas: React.FC<EditorCanvasProps> = ({ onCanvasReady }) => {
@@ -12,19 +12,14 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ onCanvasReady }) => 
   useEffect(() => {
     if (!canvasRef.current || !containerRef.current) return;
 
-    const canvas = new fabric.Canvas(canvasRef.current, {
+    const canvas = new Canvas(canvasRef.current, {
       width: containerRef.current.clientWidth,
       height: containerRef.current.clientHeight,
       backgroundColor: '#1a1a1a',
     });
 
-    // Add a grid
-    const grid = 20;
-    const width = 2000;
-    const height = 2000;
-    
     // Add default text
-    const text = new fabric.IText('Edit Pro', {
+    const text = new IText('Edit Pro', {
       left: 100,
       top: 100,
       fill: '#ffffff',

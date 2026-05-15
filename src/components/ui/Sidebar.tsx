@@ -6,7 +6,6 @@ import {
   Square, 
   Search, 
   Sparkles, 
-  FileVideo, 
   Layers,
   History,
   CloudUpload

@@ -1,6 +1,8 @@
 {
   "name": "Edit Pro",
-  "description": "Professional-grade AI design and media editor. Generate images, apply intelligent templates, and craft professional media assets.",
+  "description": "Professional-grade AI image editor with a world-class AI Chatbot assistant. Naturally converse with AI to generate premium posters, edit images, and craft high-end visual assets instantly.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

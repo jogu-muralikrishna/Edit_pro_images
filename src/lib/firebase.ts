@@ -1,59 +1,69 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer, collection, query, where, getDocs, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer, collection, query, where, getDocs, onSnapshot, setDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, enableMultiTabIndexedDbPersistence } from 'firebase/firestore';
 
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
-// Configuration helper to avoid top-level crashes
-const getFirebaseConfig = () => {
-  try {
-    return {
-      apiKey: (import.meta as any).env.VITE_FIREBASE_API_KEY || firebaseAppletConfig.apiKey,
-      authDomain: (import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN || firebaseAppletConfig.authDomain,
-      projectId: (import.meta as any).env.VITE_FIREBASE_PROJECT_ID || firebaseAppletConfig.projectId,
-      storageBucket: (import.meta as any).env.VITE_FIREBASE_STORAGE_BUCKET || firebaseAppletConfig.storageBucket,
-      messagingSenderId: (import.meta as any).env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseAppletConfig.messagingSenderId,
-      appId: (import.meta as any).env.VITE_FIREBASE_APP_ID || firebaseAppletConfig.appId,
-      firestoreDatabaseId: (import.meta as any).env.VITE_FIREBASE_DATABASE_ID || firebaseAppletConfig.firestoreDatabaseId || '(default)'
-    };
-  } catch (e) {
-    return {} as any;
-  }
+// Handle configuration for both AI Studio preview and standalone production
+const firebaseConfig = {
+  apiKey: (import.meta as any).env.VITE_FIREBASE_API_KEY || firebaseAppletConfig.apiKey,
+  authDomain: (import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN || firebaseAppletConfig.authDomain,
+  projectId: (import.meta as any).env.VITE_FIREBASE_PROJECT_ID || firebaseAppletConfig.projectId,
+  storageBucket: (import.meta as any).env.VITE_FIREBASE_STORAGE_BUCKET || firebaseAppletConfig.storageBucket,
+  messagingSenderId: (import.meta as any).env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseAppletConfig.messagingSenderId,
+  appId: (import.meta as any).env.VITE_FIREBASE_APP_ID || firebaseAppletConfig.appId,
+  firestoreDatabaseId: (import.meta as any).env.VITE_FIREBASE_DATABASE_ID || firebaseAppletConfig.firestoreDatabaseId || '(default)'
 };
 
-const firebaseConfig = getFirebaseConfig();
+// Sanitize database ID - must be a simple ID, not a URL
+const sanitizeDatabaseId = (id: any): string | undefined => {
+  if (typeof id !== 'string') return undefined;
+  const stripped = id.trim();
+  if (!stripped || stripped === '(default)' || stripped.includes('//') || stripped.includes(':') || stripped.includes('.') || stripped.length > 64) {
+    return undefined;
+  }
+  return stripped;
+};
+const firestoreDbId = sanitizeDatabaseId(firebaseConfig.firestoreDatabaseId);
+
+console.log(`[Firebase] Initializing Firestore with Database ID: ${firestoreDbId || '(default)'}`);
 
 // Defensive check to avoid Firebase crashing the whole app on boot if config is partial
-const isConfigValid = !!(firebaseConfig.apiKey && firebaseConfig.apiKey !== 'YOUR_API_KEY');
+const isConfigValid = firebaseConfig.apiKey && firebaseConfig.apiKey !== 'YOUR_API_KEY';
 
-let app: any;
-let db: any;
-let auth: any;
-
+let app;
 try {
-  if (isConfigValid) {
-    app = initializeApp(firebaseConfig);
-    db = getFirestore(app, firebaseConfig.firestoreDatabaseId === '(default)' ? undefined : firebaseConfig.firestoreDatabaseId);
-    auth = getAuth(app);
+  if (getApps().length > 0) {
+    app = getApp();
   } else {
-    throw new Error("Missing Firebase Configuration");
+    if (!isConfigValid) {
+      console.warn("Firebase config is missing or invalid. Some features will be disabled.");
+    }
+    app = initializeApp(firebaseConfig);
   }
 } catch (e) {
-  console.warn("Firebase could not be initialized. Please check your environment variables.", e);
-  // Provide safe mocks that don't crash on boot but will fail gracefully when used
-  app = { name: '[DEFAULT]', options: {} };
-  db = { type: 'firestore' }; 
-  auth = { 
-    currentUser: null,
-    onAuthStateChanged: (cb: any) => { 
-      console.warn("Auth ignored: Missing config");
-      return () => {}; 
-    },
-    signOut: () => Promise.resolve()
-  };
+  console.error("Firebase Initialization Error:", e);
+  app = { 
+    options: {}, 
+    name: '[DEFAULT]', 
+    automaticDataCollectionEnabled: false 
+  } as any;
 }
 
-export { app, db, auth };
+export const db = getFirestore(app, firestoreDbId);
+export const auth = getAuth(app);
+
+// Enable persistence for offline support
+if (typeof window !== 'undefined' && isConfigValid) {
+  enableMultiTabIndexedDbPersistence(db).catch((err) => {
+    if (err.code === 'failed-precondition') {
+      console.warn('Firestore persistence failed: Multiple tabs open');
+    } else if (err.code === 'unimplemented') {
+      console.warn('Firestore persistence is not supported in this browser');
+    }
+  });
+}
+
 export const googleProvider = new GoogleAuthProvider();
 export { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile };
 
@@ -106,19 +116,4 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 }
 
 // Connection test
-async function testConnection() {
-  if (!isConfigValid) return;
-  try {
-    // Try to list a collection that exists in rules but requires auth
-    // This will fail if not signed in, which is fine
-    const q = query(collection(db, 'projects'), where('userId', '==', 'test'), orderBy('updatedAt', 'desc'));
-    await getDocs(q);
-  } catch (error: any) {
-    // We only care if it's a structural failure (like project-not-found or invalid-config)
-    const errStr = String(error);
-    if (errStr.includes('The project') || errStr.includes('API key') || errStr.includes('offline')) {
-      console.warn("Firebase Connection Warning:", errStr.includes('offline') ? "Client is offline or network blocked." : "Check your Firebase project settings.");
-    }
-  }
-}
-testConnection();
+// Connection test removed to avoid false "offline" reports in sandbox environment.

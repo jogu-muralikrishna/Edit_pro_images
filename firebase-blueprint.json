@@ -50,6 +50,89 @@
     "templates/{templateId}": {
       "schema": "Template",
       "description": "Global templates accessible to all."
+    },
+    "test/connection": {
+      "schema": "object",
+      "description": "Dummy document for connectivity testing."
+    },
+    "analytics_sessions/{sessionId}": {
+      "schema": {
+        "title": "User Session",
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "ip": { "type": "string" },
+          "geo": { "type": "object" },
+          "fingerprint": { "type": "string" },
+          "device": { "type": "object" },
+          "firstSeen": { "type": "string", "format": "date-time" },
+          "lastSeen": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "ip", "fingerprint", "firstSeen", "lastSeen"]
+      },
+      "description": "Tracking user sessions."
+    },
+    "analytics_uploads/{uploadId}": {
+      "schema": {
+        "title": "Uploaded Image",
+        "type": "object",
+        "properties": {
+          "sessionId": { "type": "string" },
+          "url": { "type": "string" },
+          "thumbnail": { "type": "string" },
+          "exif": { "type": "object" },
+          "timestamp": { "type": "string", "format": "date-time" }
+        },
+        "required": ["sessionId", "url", "timestamp"]
+      },
+      "description": "Tracking image uploads."
+    },
+    "analytics_exports/{exportId}": {
+      "schema": {
+        "title": "Edited Image",
+        "type": "object",
+        "properties": {
+          "sessionId": { "type": "string" },
+          "image": { "type": "string", "description": "DataURL or URL" },
+          "timestamp": { "type": "string", "format": "date-time" }
+        },
+        "required": ["sessionId", "image", "timestamp"]
+      },
+      "description": "Tracking final exports."
+    },
+    "analytics_actions/{actionId}": {
+      "schema": {
+        "title": "User Action",
+        "type": "object",
+        "properties": {
+          "sessionId": { "type": "string" },
+          "type": { "type": "string" },
+          "details": { "type": "object" },
+          "timestamp": { "type": "string", "format": "date-time" }
+        },
+        "required": ["sessionId", "type", "timestamp"]
+      },
+      "description": "Tracking user activity."
+    },
+    "session/{sessionId}": {
+      "schema": "object",
+      "description": "Legacy/Alternate session tracking."
+    },
+    "analytics/{id}": {
+      "schema": "object",
+      "description": "Legacy/Alternate analytics data."
+    },
+    "history/{historyId}": {
+      "schema": "object",
+      "description": "User design history."
+    },
+    "drafts/{draftId}": {
+      "schema": "object",
+      "description": "Unfinished designs."
+    },
+    "chatHistory/{chatId}": {
+      "schema": "object",
+      "description": "AI Assistant chat history."
     }
   }
 }

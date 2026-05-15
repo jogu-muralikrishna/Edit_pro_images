@@ -1,13 +1,12 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 0. Global Safety Net
+    // Default deny
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // --- Helpers ---
+    // --- Global Helpers ---
     function isSignedIn() {
       return request.auth != null;
     }
@@ -16,6 +15,7 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    // ID poisoning guard
     function isValidId(id) {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
@@ -28,63 +28,111 @@ service cloud.firestore {
       return resource.data;
     }
 
-    // --- Validation Helpers ---
-    
-    function isValidUser(data) {
-      return data.keys().hasAll(['email', 'createdAt']) &&
-             data.email is string && data.email.size() <= 256 &&
-             data.createdAt == request.time;
+    match /test/connection {
+      allow read: if true;
     }
 
-    function isValidProject(data) {
-      return data.keys().hasAll(['name', 'data', 'userId', 'createdAt', 'updatedAt']) &&
-             data.name is string && data.name.size() > 0 && data.name.size() <= 256 &&
-             data.data is string && data.data.size() <= 1048576 && // 1MB limit check
-             (data.preview == null || (data.preview is string && data.preview.size() <= 102400)) && // 100KB limit for preview
-             data.userId == request.auth.uid &&
-             data.createdAt is timestamp &&
+    // --- Entity Validations ---
+
+    function isValidUser(data) {
+      return data.email is string && data.email.size() <= 256 &&
+             (request.method == 'create' ? data.createdAt == request.time : true) &&
              data.updatedAt == request.time;
     }
 
-    function isValidTemplate(data) {
-      return data.keys().hasAll(['name', 'category', 'previewUrl', 'canvasData', 'createdAt']) &&
-             data.name is string && data.name.size() <= 256 &&
-             data.category is string &&
-             data.previewUrl is string &&
-             data.canvasData is string &&
-             data.createdAt is timestamp;
+    function isValidProject(data) {
+      return data.name is string && data.name.size() <= 256 &&
+             data.data is string && data.data.size() <= 2097152 && // Allow up to 2MB for big canvas states
+             data.userId is string && data.userId == request.auth.uid &&
+             (request.method == 'create' ? data.createdAt == request.time : true) &&
+             data.updatedAt == request.time;
+    }
+
+    function isValidContent(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             (request.method == 'create' ? data.createdAt == request.time : true) &&
+             (data.updatedAt == request.time || !('updatedAt' in data));
+    }
+
+    function isValidAnalytics(data) {
+      return (data.sessionId is string && data.sessionId.size() <= 128) || 
+             (data.userId is string && data.userId == request.auth.uid);
     }
 
     // --- Collection Routes ---
 
+    // User Profiles
     match /users/{userId} {
       allow get: if isOwner(userId);
-      allow create: if isOwner(userId) && isValidUser(incoming());
-      allow update: if isOwner(userId) && 
-                      isValidUser(incoming()) && 
-                      incoming().email == existing().email &&
-                      incoming().createdAt == existing().createdAt;
+      allow create: if isOwner(userId) && isValidUser(incoming()) && isValidId(userId);
+      allow update: if isOwner(userId) && isValidUser(incoming()) && 
+                    incoming().diff(existing()).affectedKeys().hasOnly(['email', 'updatedAt']);
     }
 
+    // Design Projects
     match /projects/{projectId} {
       allow get: if isSignedIn() && existing().userId == request.auth.uid;
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && isValidId(projectId) && isValidProject(incoming()) && incoming().createdAt == request.time;
-      allow update: if isSignedIn() && 
-                      isValidProject(incoming()) && 
-                      existing().userId == request.auth.uid &&
-                      incoming().userId == existing().userId &&
-                      incoming().createdAt == existing().createdAt &&
-                      (
-                        // Action: Update Data/Name/Preview
-                        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'data', 'preview', 'updatedAt'])
-                      );
+      allow create: if isSignedIn() && isValidProject(incoming()) && isValidId(projectId);
+      allow update: if isSignedIn() && existing().userId == request.auth.uid && 
+                    isValidProject(incoming()) &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['name', 'data', 'preview', 'updatedAt']);
       allow delete: if isSignedIn() && existing().userId == request.auth.uid;
     }
 
+    // Global Read-only Templates
     match /templates/{templateId} {
+      allow read: if true;
+      allow write: if false; 
+    }
+
+    // Analytics (Used by admin and tracking scripts)
+    match /analytics_sessions/{sessionId} {
+      allow create: if isValidId(sessionId);
+      allow update: if isValidId(sessionId) || isSignedIn();
+      allow get: if isSignedIn();
+    }
+    match /analytics_uploads/{id} {
+      allow create: if isValidAnalytics(incoming()) && isValidId(id);
       allow read: if isSignedIn();
-      allow write: if false; // Only manageable via Admin SDK or Console
+    }
+    match /analytics_exports/{id} {
+      allow create: if isValidAnalytics(incoming()) && isValidId(id);
+      allow read: if isSignedIn();
+    }
+    match /analytics_actions/{id} {
+      allow create: if isValidAnalytics(incoming()) && isValidId(id);
+      allow read: if isSignedIn();
+    }
+    
+    // Explicit 'session' and 'analytics' for edge cases
+    match /session/{id} {
+        allow create, update: if isValidId(id) || isSignedIn();
+        allow read: if isSignedIn();
+    }
+    match /analytics/{id} {
+        allow create, update: if isValidAnalytics(incoming()) || isSignedIn();
+        allow read: if isSignedIn();
+    }
+
+    // User Content Collections
+    match /history/{docId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidContent(incoming()) && isValidId(docId);
+      allow update: if isSignedIn() && existing().userId == request.auth.uid && isValidContent(incoming());
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+    match /drafts/{docId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidContent(incoming()) && isValidId(docId);
+      allow update: if isSignedIn() && existing().userId == request.auth.uid && isValidContent(incoming());
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+    match /chatHistory/{docId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidContent(incoming()) && isValidId(docId);
+      allow update: if isSignedIn() && existing().userId == request.auth.uid && isValidContent(incoming());
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
     }
   }
 }

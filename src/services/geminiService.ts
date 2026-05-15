@@ -1,3 +1,5 @@
+import { removeBackground as imglyRemoveBackground } from '@imgly/background-removal';
+
 /**
  * AI Services using server-side API Proxy.
  * This makes the app production-ready and protects API keys.
@@ -30,7 +32,6 @@
        ctx?.drawImage(img, 0, 0, width, height);
        resolve(canvas.toDataURL('image/png', 0.8));
      };
-     img.onerror = () => resolve(dataUrl);
      img.src = dataUrl;
    });
  };
@@ -108,30 +109,51 @@
  };
  
  /**
-  * Specialized background removal using AI.
+  * Specialized background removal using High Processor library.
+  * Uses @imgly/background-removal for precise, transparent results.
   */
  export const removeBackground = async (imageData: string): Promise<string> => {
    try {
-     const optimizedImage = await optimizeImage(imageData);
- 
-     const response = await fetch('/api/remove-bg', {
-       method: 'POST',
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify({ image: optimizedImage })
-     });
- 
-     if (!response.ok) {
-       const errorData = await response.json();
-       throw new Error(errorData.error || 'Background removal failed');
-     }
- 
-     const data = await response.json();
-     if (data.image) return data.image;
+     console.log("Starting high-precision background removal...");
      
-     throw new Error("Failed to process background removal");
+     // Use the specialized library as the primary high-processor method
+     const blob = await imglyRemoveBackground(imageData, {
+       progress: (step, current, total) => {
+         console.log(`BG-Removal [${step}]: ${Math.round((current / total) * 100)}%`);
+       }
+     });
+
+     return new Promise((resolve, reject) => {
+       const reader = new FileReader();
+       reader.onloadend = () => resolve(reader.result as string);
+       reader.onerror = reject;
+       reader.readAsDataURL(blob);
+     });
    } catch (error) {
-     console.error("Remove BG Error:", error);
-     throw error;
+     console.warn("Library-based BG removal failed, falling back to Gemini AI:", error);
+     
+     // Fallback to Gemini if the local library fails
+     try {
+       const optimizedImage = await optimizeImage(imageData);
+       const response = await fetch('/api/remove-bg', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ image: optimizedImage })
+       });
+ 
+       if (!response.ok) {
+         const errorData = await response.json();
+         throw new Error(errorData.error || 'Gemini background removal failed');
+       }
+ 
+       const data = await response.json();
+       if (data.image) return data.image;
+       
+       throw new Error("Failed to process background removal with Gemini");
+     } catch (geminiError) {
+       console.error("Both BG removal methods failed:", geminiError);
+       throw geminiError;
+     }
    }
  };
  
@@ -157,4 +179,3 @@
      return [];
    }
  };
-
