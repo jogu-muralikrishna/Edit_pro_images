@@ -11,8 +11,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isVerified() {
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com');
+    }
+
     function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+      return isVerified() && request.auth.uid == userId;
     }
 
     // ID poisoning guard
@@ -42,7 +46,7 @@ service cloud.firestore {
 
     function isValidProject(data) {
       return data.name is string && data.name.size() <= 256 &&
-             data.data is string && data.data.size() <= 2097152 && // Allow up to 2MB for big canvas states
+             data.data is string && data.data.size() <= 4194304 && // Allow up to 4MB for high-res canvas states
              data.userId is string && data.userId == request.auth.uid &&
              (request.method == 'create' ? data.createdAt == request.time : true) &&
              data.updatedAt == request.time;
@@ -51,7 +55,7 @@ service cloud.firestore {
     function isValidContent(data) {
       return data.userId is string && data.userId == request.auth.uid &&
              (request.method == 'create' ? data.createdAt == request.time : true) &&
-             (data.updatedAt == request.time || !('updatedAt' in data));
+             (data.updatedAt == request.time || !('updatedAt' in data || request.method == 'update'));
     }
 
     function isValidAnalytics(data) {
@@ -66,18 +70,18 @@ service cloud.firestore {
       allow get: if isOwner(userId);
       allow create: if isOwner(userId) && isValidUser(incoming()) && isValidId(userId);
       allow update: if isOwner(userId) && isValidUser(incoming()) && 
-                    incoming().diff(existing()).affectedKeys().hasOnly(['email', 'updatedAt']);
+                    incoming().diff(existing()).affectedKeys().hasOnly(['email', 'displayName', 'photoURL', 'updatedAt']);
     }
 
     // Design Projects
     match /projects/{projectId} {
-      allow get: if isSignedIn() && existing().userId == request.auth.uid;
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && isValidProject(incoming()) && isValidId(projectId);
-      allow update: if isSignedIn() && existing().userId == request.auth.uid && 
+      allow get: if isVerified() && existing().userId == request.auth.uid;
+      allow list: if isVerified() && resource.data.userId == request.auth.uid;
+      allow create: if isVerified() && isValidProject(incoming()) && isValidId(projectId);
+      allow update: if isVerified() && existing().userId == request.auth.uid && 
                     isValidProject(incoming()) &&
                     incoming().diff(existing()).affectedKeys().hasOnly(['name', 'data', 'preview', 'updatedAt']);
-      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+      allow delete: if isVerified() && existing().userId == request.auth.uid;
     }
 
     // Global Read-only Templates
@@ -93,15 +97,15 @@ service cloud.firestore {
       allow get: if isSignedIn();
     }
     match /analytics_uploads/{id} {
-      allow create: if isValidAnalytics(incoming()) && isValidId(id);
+      allow create: if (isValidAnalytics(incoming()) || isSignedIn()) && isValidId(id);
       allow read: if isSignedIn();
     }
     match /analytics_exports/{id} {
-      allow create: if isValidAnalytics(incoming()) && isValidId(id);
+      allow create: if (isValidAnalytics(incoming()) || isSignedIn()) && isValidId(id);
       allow read: if isSignedIn();
     }
     match /analytics_actions/{id} {
-      allow create: if isValidAnalytics(incoming()) && isValidId(id);
+      allow create: if (isValidAnalytics(incoming()) || isSignedIn()) && isValidId(id);
       allow read: if isSignedIn();
     }
     
@@ -111,28 +115,28 @@ service cloud.firestore {
         allow read: if isSignedIn();
     }
     match /analytics/{id} {
-        allow create, update: if isValidAnalytics(incoming()) || isSignedIn();
+        allow create, update: if (isValidAnalytics(incoming()) || isSignedIn());
         allow read: if isSignedIn();
     }
 
     // User Content Collections
     match /history/{docId} {
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && isValidContent(incoming()) && isValidId(docId);
-      allow update: if isSignedIn() && existing().userId == request.auth.uid && isValidContent(incoming());
-      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+      allow read: if isVerified() && resource.data.userId == request.auth.uid;
+      allow create: if isVerified() && isValidContent(incoming()) && isValidId(docId);
+      allow update: if isVerified() && existing().userId == request.auth.uid && isValidContent(incoming());
+      allow delete: if isVerified() && existing().userId == request.auth.uid;
     }
     match /drafts/{docId} {
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && isValidContent(incoming()) && isValidId(docId);
-      allow update: if isSignedIn() && existing().userId == request.auth.uid && isValidContent(incoming());
-      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+      allow read: if isVerified() && resource.data.userId == request.auth.uid;
+      allow create: if isVerified() && isValidContent(incoming()) && isValidId(docId);
+      allow update: if isVerified() && existing().userId == request.auth.uid && isValidContent(incoming());
+      allow delete: if isVerified() && existing().userId == request.auth.uid;
     }
     match /chatHistory/{docId} {
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && isValidContent(incoming()) && isValidId(docId);
-      allow update: if isSignedIn() && existing().userId == request.auth.uid && isValidContent(incoming());
-      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+      allow read: if isVerified() && resource.data.userId == request.auth.uid;
+      allow create: if isVerified() && isValidContent(incoming()) && isValidId(docId);
+      allow update: if isVerified() && existing().userId == request.auth.uid && isValidContent(incoming());
+      allow delete: if isVerified() && existing().userId == request.auth.uid;
     }
   }
 }
