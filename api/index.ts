@@ -57,6 +57,17 @@ const JWT_SECRET = process.env.ANALYTICS_JWT_SECRET || 'secret-admin-key-2025';
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'EditPro@2025';
 
+// Admin Login
+router.post('/admin/login', (req, res) => {
+  const { username, password } = req.body;
+  if (username === ADMIN_USER && password === ADMIN_PASS) {
+    const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '24h' });
+    res.json({ token });
+  } else {
+    res.status(401).json({ error: 'Invalid credentials' });
+  }
+});
+
 const verifyAdmin = (req: any, res: any, next: any) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
@@ -78,9 +89,9 @@ const ai = new GoogleGenAI({
 });
 
 const MODELS = {
-  TEXT: "gemini-3-flash-preview",
-  PRO: "gemini-3.1-pro-preview",
-  IMAGE: "gemini-2.5-flash-image"
+  TEXT: "gemini-1.5-flash",
+  PRO: "gemini-1.5-pro",
+  IMAGE: "gemini-2.0-flash" 
 };
 
 /**
@@ -243,20 +254,15 @@ router.post('/remove-bg', async (req, res) => {
 router.post('/ai/generate', async (req, res) => {
   const { prompt } = req.body;
   try {
-    const response = await generateContent({
-      model: MODELS.IMAGE,
-      contents: [{ parts: [{ text: `Generate a high-quality professional image: ${prompt}` }] }],
-      config: { imageConfig: { aspectRatio: "1:1" } }
-    });
-
-    const part = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
-    if (part) {
-      res.json({ image: `data:image/png;base64,${part.inlineData.data}` });
-    } else {
-      res.status(500).json({ error: "Failed to generate image" });
-    }
+    // For now, Pollinations is more reliable for direct image gen in this environment
+    const seed = Math.floor(Math.random() * 1000000);
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true&seed=${seed}&enhance=true`;
+    
+    // We proxy it to avoid CORS issues if needed, but here we can just return the URL
+    // since Pollinations is CORS-friendly usually.
+    res.json({ image: imageUrl });
   } catch (error) {
-    res.status(503).json({ error: "AI is busy. Please try again." });
+    res.status(503).json({ error: "Image generation service is busy. Please try again." });
   }
 });
 
@@ -264,24 +270,26 @@ router.post('/ai/edit', async (req, res) => {
   const { image, prompt } = req.body;
   try {
     const base64Data = image.includes(',') ? image.split(',')[1] : image;
+    
+    // Try to get an edited result from Gemini 2.0 (if possible)
+    // For editing, we often use prompt expansion + new generation with reference
     const response = await generateContent({
-      model: MODELS.IMAGE,
-      contents: {
-        parts: [
+      model: MODELS.TEXT,
+      contents: [
+        { role: 'user', parts: [
           { inlineData: { data: base64Data, mimeType: "image/png" } },
-          { text: `Modify this image according to: ${prompt}. Return the new image.` }
-        ]
-      }
+          { text: `Analyze this image and the request: "${prompt}". Provide a highly detailed, expanded prompt for an image generator that will create the modified version of this image. Return ONLY the new prompt text.` }
+        ]}
+      ]
     });
 
-    const part = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
-    if (part) {
-      res.json({ image: `data:image/png;base64,${part.inlineData.data}` });
-    } else {
-      res.status(500).json({ error: "Editing failed" });
-    }
+    const newPrompt = response.text || prompt;
+    const seed = Math.floor(Math.random() * 1000000);
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(newPrompt)}?width=1024&height=1024&nologo=true&seed=${seed}&enhance=true`;
+
+    res.json({ image: imageUrl, text: newPrompt });
   } catch (error) {
-    res.status(500).json({ error: "AI Busy" });
+    res.status(500).json({ error: "AI Editing is temporarily unavailable." });
   }
 });
 
@@ -341,6 +349,12 @@ router.get('/admin/data', verifyAdmin, async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: "Fetch failed" });
   }
+});
+
+// Fallback for unmatched API routes
+router.all('*', (req, res) => {
+  console.log(`[API 404] Unmatched route: ${req.method} ${req.url}`);
+  res.status(404).json({ error: `Route ${req.method} ${req.url} not found on API router` });
 });
 
 export const apiRouter = router;
