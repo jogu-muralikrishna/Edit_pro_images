@@ -5,9 +5,8 @@
       "destination": "/api/index.ts"
     },
     {
-      "source": "/((?!api|favicon.ico|assets|.*\\..*).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
-  ],
-  "framework": "vite"
+  ]
 }
