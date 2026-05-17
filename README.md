@@ -25,6 +25,7 @@ Go to **Settings > Environment Variables** and add:
   - `VITE_FIREBASE_STORAGE_BUCKET`
   - `VITE_FIREBASE_MESSAGING_SENDER_ID`
   - `VITE_FIREBASE_APP_ID`
+  - `VITE_FIREBASE_DATABASE_ID` (Optional, defaults to (default))
 
 ### 3. Troubleshooting "Black Page"
 - **Reason 1: Missing API Keys**: If Firebase doesn't find an API key, it might crash the app on boot. I've added a fix to prevent the crash, but you must still provide the keys for it to work.

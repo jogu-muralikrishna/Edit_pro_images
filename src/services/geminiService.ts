@@ -122,7 +122,7 @@ import { removeBackground as imglyRemoveBackground } from '@imgly/background-rem
          console.log(`BG-Removal [${step}]: ${Math.round((current / total) * 100)}%`);
        }
      });
-
+ 
      return new Promise((resolve, reject) => {
        const reader = new FileReader();
        reader.onloadend = () => resolve(reader.result as string);
@@ -177,5 +177,24 @@ import { removeBackground as imglyRemoveBackground } from '@imgly/background-rem
    } catch (error) {
      console.error("Editing Suggestions Error:", error);
      return [];
+   }
+ };
+
+ /**
+  * Detects the typography style of an image.
+  */
+ export const detectTextStyle = async (imageData: string) => {
+   try {
+     const optimizedImage = await optimizeImage(imageData, 512);
+     const response = await fetch('/api/ai/detect-style', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ image: optimizedImage })
+     });
+     if (!response.ok) throw new Error('Style analysis failed');
+     return await response.json();
+   } catch (error) {
+     console.error("Style Detection Error:", error);
+     return null;
    }
  };

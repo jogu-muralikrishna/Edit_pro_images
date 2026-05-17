@@ -19,6 +19,7 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
   const tabs = [
     { id: 'templates', icon: Layout, label: 'Templates' },
+    { id: 'photo-edit', icon: ImageIcon, label: 'Edit Photo' },
     { id: 'assets', icon: ImageIcon, label: 'Assets' },
     { id: 'text', icon: Type, label: 'Text' },
     { id: 'shapes', icon: Square, label: 'Shapes' },

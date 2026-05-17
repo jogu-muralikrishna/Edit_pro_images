@@ -9,6 +9,7 @@ import { AssetsPanel } from '../components/ui/AssetsPanel';
 import { ShapesPanel } from '../components/ui/ShapesPanel';
 import { DraftsPanel } from '../components/ui/DraftsPanel';
 import { UploadsPanel } from '../components/ui/UploadsPanel';
+import { PhotoEditPanel } from '../components/ui/PhotoEditPanel';
 import { AuthModal } from '../components/ui/AuthModal';
 import { Canvas, IText, Rect, Circle, Triangle, Path, FabricImage, Shadow } from 'fabric';
 import { motion, AnimatePresence } from 'motion/react';
@@ -104,6 +105,39 @@ export default function ImageEditor() {
               })
             });
             canvas.add(textObj);
+          } else if (el.type === 'image' && el.imagePrompt) {
+            try {
+              const url = await generateAIImage(el.imagePrompt);
+              await new Promise<void>((resolve) => {
+                FabricImage.fromURL(url, { crossOrigin: 'anonymous' }).then((img) => {
+                  img.scaleToWidth(el.width || 300);
+                  img.set({
+                    left: el.left || 500,
+                    top: el.top || 500,
+                    originX: 'center',
+                    originY: 'center'
+                  });
+                  canvas.add(img);
+                  resolve();
+                }).catch(() => resolve());
+              });
+            } catch (e) { console.error("Element Image Gen Error:", e); }
+          } else if (el.type === 'shape') {
+             let shape: any;
+             const props: any = { 
+               left: el.left || 500, 
+               top: el.top || 500, 
+               fill: el.color || '#8B5CF6', 
+               width: el.width || 100, 
+               height: el.height || 100,
+               originX: 'center',
+               originY: 'center'
+             };
+             if (el.shapeType === 'rect') shape = new Rect(props);
+             else if (el.shapeType === 'circle') shape = new Circle({ ...props, radius: (el.width || 100) / 2 });
+             else if (el.shapeType === 'triangle') shape = new Triangle(props);
+             
+             if (shape) canvas.add(shape);
           }
         }
       }
@@ -124,7 +158,7 @@ export default function ImageEditor() {
       projectName,
       elements: objects.map((obj: any) => ({
         id: obj.id || obj._id || Math.random().toString(36).substr(2, 9),
-        type: obj.type === 'i-text' || obj.type === 'text' ? 'text' : obj.type,
+        type: obj.type === 'i-text' || obj.type === 'text' ? 'text' : (obj.type === 'image' ? 'image' : 'shape'),
         text: (obj as any).text || '',
         fontSize: (obj as any).fontSize,
         fontFamily: (obj as any).fontFamily,
@@ -171,7 +205,7 @@ export default function ImageEditor() {
       if (posterData.elements) {
         const objects = canvas.getObjects();
         for (const el of posterData.elements) {
-          // Try to find matching object by text content or type/position proximity
+          // Try to find matching object by ID or text content
           let target = objects.find((obj: any) => 
             (el.id && (obj.id === el.id || obj._id === el.id)) || 
             (el.type === 'text' && obj.text === el.text)
@@ -179,33 +213,60 @@ export default function ImageEditor() {
 
           if (target) {
             const t = target as any;
-            t.set({
+            const props: any = {
               left: el.left ?? t.left,
               top: el.top ?? t.top,
-              fontSize: el.fontSize ?? t.fontSize,
-              fontFamily: el.fontFamily ?? t.fontFamily,
-              fill: el.color ?? t.fill,
-              fontWeight: el.fontWeight ?? t.fontWeight,
-              textAlign: el.textAlign ?? t.textAlign,
               opacity: el.opacity ?? t.opacity,
               visible: el.visible ?? t.visible
-            });
-          } else if (el.type === 'text') {
+            };
+
+            if (el.type === 'text') {
+              props.fontSize = el.fontSize ?? t.fontSize;
+              props.fontFamily = el.fontFamily ?? t.fontFamily;
+              props.fill = el.color ?? t.fill;
+              props.fontWeight = el.fontWeight ?? t.fontWeight;
+              props.textAlign = el.textAlign ?? t.textAlign;
+            } else if (el.type === 'shape') {
+              props.fill = el.color ?? t.fill;
+              props.width = el.width ?? t.width;
+              props.height = el.height ?? t.height;
+            }
+
+            t.set(props);
+          } else {
             // Add new if not found
-            const textObj = new IText(el.text, {
-              left: el.left || 500,
-              top: el.top || 500,
-              originX: el.textAlign === 'center' ? 'center' : 'left',
-              fontSize: el.fontSize || 50,
-              fontFamily: el.fontFamily || 'Inter',
-              fill: el.color || '#ffffff',
-              fontWeight: el.fontWeight || 'normal',
-              textAlign: el.textAlign || 'center',
-              shadow: new Shadow({
-                color: 'rgba(0,0,0,0.8)', blur: 15, offsetX: 0, offsetY: 2
-              })
-            });
-            canvas.add(textObj);
+            if (el.type === 'text') {
+              const textObj = new IText(el.text, {
+                left: el.left || 500,
+                top: el.top || 500,
+                originX: el.textAlign === 'center' ? 'center' : 'left',
+                fontSize: el.fontSize || 50,
+                fontFamily: el.fontFamily || 'Inter',
+                fill: el.color || '#ffffff',
+                fontWeight: el.fontWeight || 'normal',
+                textAlign: el.textAlign || 'center',
+                shadow: new Shadow({ color: 'rgba(0,0,0,0.8)', blur: 15, offsetX: 0, offsetY: 2 })
+              });
+              canvas.add(textObj);
+            } else if (el.type === 'image' && el.imagePrompt) {
+              const url = await generateAIImage(el.imagePrompt);
+              FabricImage.fromURL(url, { crossOrigin: 'anonymous' }).then((img) => {
+                img.scaleToWidth(el.width || 300);
+                img.set({ left: el.left || 500, top: el.top || 500, originX: 'center', originY: 'center' });
+                canvas.add(img);
+                canvas.renderAll();
+              });
+            } else if (el.type === 'shape') {
+            const props = { 
+                left: el.left || 500, top: el.top || 500, fill: el.color || '#8B5CF6', 
+                width: el.width || 100, height: el.height || 100, originX: 'center' as any, originY: 'center' as any
+              };
+              let shape: any;
+              if (el.shapeType === 'rect') shape = new Rect(props);
+              else if (el.shapeType === 'circle') shape = new Circle({ ...props, radius: (el.width || 100) / 2 });
+              else if (el.shapeType === 'triangle') shape = new Triangle(props);
+              if (shape) canvas.add(shape);
+            }
           }
         }
       }
@@ -386,6 +447,7 @@ export default function ImageEditor() {
               <AnimatePresence mode="wait">
                 <motion.div key={activeTab} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} transition={{ duration: 0.2 }} className="flex-1 overflow-hidden" >
                   {activeTab === 'templates' && <TemplatesPanel onLoadTemplate={loadTemplate} />}
+                  {activeTab === 'photo-edit' && <PhotoEditPanel canvas={canvas} onAddImage={addImage} setLoading={setLoading} projectName={projectName} />}
                   {activeTab === 'ai' && <AIPanel onAddImage={addImage} />}
                   {activeTab === 'stock' && <StockPanel onAddMedia={(url) => addImage(url)} />}
                   {activeTab === 'assets' && <AssetsPanel onAddAsset={(_, a) => addImage(a.url)} />}
@@ -412,145 +474,6 @@ export default function ImageEditor() {
                       </div>
 
                       <AnimatePresence>
-                        {selectedObject && selectedObject.type === 'image' && (
-                          <motion.div 
-                            initial={{ opacity: 0, height: 0 }} 
-                            animate={{ opacity: 1, height: 'auto' }} 
-                            exit={{ opacity: 0, height: 0 }}
-                            className="p-5 bg-white/5 border border-white/10 rounded-2xl space-y-4 overflow-hidden"
-                          >
-                             <div className="flex items-center gap-2 mb-2">
-                               <Sparkles size={14} className="text-purple-400" />
-                               <span className="text-[10px] font-black uppercase tracking-widest text-white italic">Neural Engine</span>
-                             </div>
-
-                             <div className="space-y-4">
-                               <div className="grid grid-cols-2 gap-2">
-                                 <button 
-                                   onClick={async () => {
-                                     if (!selectedObject) return;
-                                     const originalUrl = selectedObject.src || selectedObject.getSrc();
-                                     try {
-                                       setLoading(true);
-                                       analytics.trackAction('ai_remove_bg', { originalUrl });
-                                       const newUrl = await removeBackground(originalUrl);
-                                       if (selectedObject instanceof FabricImage) {
-                                         await selectedObject.setSrc(newUrl);
-                                         canvas?.renderAll();
-                                       }
-                                     } catch (e) { console.error(e); } finally { setLoading(false); }
-                                   }}
-                                   className="py-3 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-xl text-[9px] font-black uppercase tracking-widest text-purple-300 transition-all flex flex-col items-center gap-1.5 group"
-                                 >
-                                   <Eraser size={14} className="group-hover:scale-110 transition-transform" />
-                                   Auto Cutout
-                                 </button>
-                                 <button 
-                                   onClick={async () => {
-                                     if (!selectedObject) return;
-                                     const originalUrl = selectedObject.src || selectedObject.getSrc();
-                                     try {
-                                       setLoading(true);
-                                       analytics.trackAction('ai_enhance', { originalUrl });
-                                       const newUrl = await editImageWithAI(originalUrl, "Enhance image: improve resolution, fix lighting, sharpen details, professional color grade, 4k ultra hd quality");
-                                       if (selectedObject instanceof FabricImage) {
-                                         await selectedObject.setSrc(newUrl);
-                                         canvas?.renderAll();
-                                       }
-                                     } catch (e) { console.error(e); } finally { setLoading(false); }
-                                   }}
-                                   className="py-3 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-xl text-[9px] font-black uppercase tracking-widest text-blue-300 transition-all flex flex-col items-center gap-1.5 group"
-                                 >
-                                   <Zap size={14} className="group-hover:scale-110 transition-transform" />
-                                   AI Enhance
-                                 </button>
-                               </div>
-
-                               <div className="space-y-2">
-                                 <div className="flex items-center justify-between">
-                                   <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 ml-1">AI Transformation</label>
-                                   <button 
-                                     onClick={async () => {
-                                       if (!selectedObject) return;
-                                       const originalUrl = selectedObject.src || selectedObject.getSrc();
-                                       try {
-                                         const suggestions = await getEditingSuggestions(originalUrl);
-                                         if (suggestions.length > 0) {
-                                           const input = document.getElementById('imageRefinePrompt') as HTMLInputElement;
-                                           if (input) input.value = suggestions[Math.floor(Math.random() * suggestions.length)];
-                                         }
-                                       } catch (e) { console.error(e); }
-                                     }}
-                                     className="text-purple-400 hover:text-purple-300 transition-all"
-                                     title="Get Intelligent Suggestions"
-                                   >
-                                     <Sparkles size={12} />
-                                   </button>
-                                 </div>
-                                 
-                                 <div className="relative group">
-                                   <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl blur opacity-0 group-focus-within:opacity-30 transition duration-500" />
-                                   <div className="relative flex gap-2">
-                                     <input 
-                                       type="text"
-                                       id="imageRefinePrompt"
-                                       placeholder="e.g. Change sky to sunset..."
-                                       className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-[10px] text-white outline-none focus:border-purple-500/50"
-                                     />
-                                     <button 
-                                       onClick={async () => {
-                                         const input = document.getElementById('imageRefinePrompt') as HTMLInputElement;
-                                         const p = input.value;
-                                         if (!selectedObject || !p) return;
-                                         const originalUrl = selectedObject.src || selectedObject.getSrc();
-                                         try {
-                                            setLoading(true);
-                                            const newUrl = await editImageWithAI(originalUrl, p);
-                                            if (selectedObject instanceof FabricImage) {
-                                              await selectedObject.setSrc(newUrl);
-                                              canvas?.renderAll();
-                                            }
-                                            input.value = '';
-                                         } catch (e) { console.error(e); } finally { setLoading(false); }
-                                       }}
-                                       className="w-10 bg-purple-600 hover:bg-purple-500 rounded-xl transition-all flex items-center justify-center group"
-                                     >
-                                       <Wand2 size={14} className="text-white group-hover:rotate-12 transition-transform" />
-                                     </button>
-                                   </div>
-                                 </div>
-                               </div>
-
-                               <div className="grid grid-cols-3 gap-2 pt-1">
-                                 {[
-                                   { label: 'Anime', prompt: 'convert to high quality anime style' },
-                                   { label: 'Cyber', prompt: 'apply neon cyberpunk aesthetic' },
-                                   { label: 'Sketch', prompt: 'convert to pencil sketch art' }
-                                 ].map(p => (
-                                   <button 
-                                     key={p.label}
-                                     onClick={async () => {
-                                       if (!selectedObject) return;
-                                       const originalUrl = selectedObject.src || selectedObject.getSrc();
-                                       try {
-                                         setLoading(true);
-                                         const newUrl = await editImageWithAI(originalUrl, p.prompt);
-                                         if (selectedObject instanceof FabricImage) {
-                                           await selectedObject.setSrc(newUrl);
-                                           canvas?.renderAll();
-                                         }
-                                       } catch (e) { console.error(e); } finally { setLoading(false); }
-                                     }}
-                                     className="py-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg text-[8px] font-bold uppercase tracking-tighter text-gray-400 hover:text-white transition-all"
-                                   >
-                                     {p.label}
-                                   </button>
-                                 ))}
-                               </div>
-                             </div>
-                          </motion.div>
-                        )}
-
                         {selectedObject && (selectedObject.type === 'i-text' || selectedObject.type === 'text') && (
                           <motion.div 
                             initial={{ opacity: 0, height: 0 }} 

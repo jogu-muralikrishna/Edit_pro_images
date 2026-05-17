@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MessageSquare, Send, X, Sparkles, Wand2, Type } from 'lucide-react';
+import { MessageSquare, Send, X, Sparkles, Wand2, Type, Bot } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { chatWithAI } from '../../services/chatService';
 import { analytics } from '../../services/analyticsService';
 import { db, auth } from '../../lib/firebase';
@@ -23,12 +24,22 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
   getCurrentCanvasState 
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: "Hey! 👋 I'm your Edit Pro AI assistant. I can design professional posters for you. What are we creating today?" }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Initial greeting with typing effect
+  useEffect(() => {
+    if (messages.length === 0) {
+      setIsTyping(true);
+      const timer = setTimeout(() => {
+        setMessages([{ role: 'assistant', content: "Hey! 👋 I'm your Edit Pro AI assistant. I'm here to help you design anything you can imagine. Whether it's a professional poster or a creative social post, just tell me what you need!" }]);
+        setIsTyping(false);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   // Load chat history on mount
   useEffect(() => {
@@ -122,17 +133,18 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
             className="mb-4 w-[420px] h-[650px] glass-card flex flex-col overflow-hidden shadow-[0_32px_64px_-12px_rgba(0,0,0,0.5)] border-white/20 ring-1 ring-white/10"
           >
             {/* Header */}
-            <div className="p-5 border-b border-white/10 bg-gradient-to-r from-purple-900/40 to-blue-900/40 backdrop-blur-3xl flex items-center justify-between">
+            <div className="p-5 border-b border-white/10 bg-gradient-to-r from-purple-900/60 to-blue-900/60 backdrop-blur-3xl flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center shadow-xl shadow-purple-500/20 relative group">
-                  <Sparkles size={20} className="text-white group-hover:rotate-12 transition-transform" />
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#1A1A1A] animate-pulse" />
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 via-fuchsia-500 to-blue-600 flex items-center justify-center shadow-2xl shadow-purple-500/30 relative group overflow-hidden">
+                  <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Sparkles size={24} className="text-white group-hover:scale-110 transition-transform relative z-10" />
+                  <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-black animate-pulse" />
                 </div>
                 <div>
-                  <h3 className="text-[11px] font-black uppercase tracking-[0.3em] text-white">Edit Pro Assistant</h3>
-                  <p className="text-[9px] text-purple-400 font-bold uppercase tracking-widest flex items-center gap-1.5">
-                    <span className="w-1 h-1 bg-purple-400 rounded-full animate-ping" />
-                    Ultra Intelligent AI
+                  <h3 className="text-sm font-black text-white leading-tight">Edit Pro Agent</h3>
+                  <p className="text-[10px] text-purple-400 font-bold uppercase tracking-widest flex items-center gap-1.5 mt-0.5">
+                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                    Online & Ready
                   </p>
                 </div>
               </div>
@@ -157,12 +169,24 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
                   key={i}
                   className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
-                  <div className={`max-w-[88%] p-4 rounded-3xl text-[13px] font-medium leading-relaxed shadow-sm ${
+                  <div className={`max-w-[90%] p-4 rounded-2xl text-[13px] leading-relaxed shadow-sm ${
                     msg.role === 'user' 
-                      ? 'bg-gradient-to-br from-purple-600 to-purple-700 text-white rounded-tr-none shadow-purple-900/40' 
-                      : 'bg-white/5 text-gray-100 border border-white/10 rounded-tl-none font-normal'
+                      ? 'bg-gradient-to-br from-purple-600 to-purple-700 text-white rounded-tr-none shadow-purple-900/40 font-medium' 
+                      : 'bg-white/5 text-gray-200 border border-white/10 rounded-tl-none font-normal prose prose-invert prose-sm max-w-none'
                   }`}>
-                    {msg.content}
+                    {msg.role === 'assistant' ? (
+                      <ReactMarkdown
+                        components={{
+                          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                          strong: ({ children }) => <strong className="text-white font-bold">{children}</strong>,
+                          code: ({ children }) => <code className="bg-white/10 px-1 rounded text-purple-300 font-mono text-[11px]">{children}</code>
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                    ) : (
+                      msg.content
+                    )}
                   </div>
                 </motion.div>
               ))}

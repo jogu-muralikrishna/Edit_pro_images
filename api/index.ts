@@ -89,10 +89,18 @@ const ai = new GoogleGenAI({
 });
 
 const MODELS = {
-  TEXT: "gemini-1.5-flash",
-  PRO: "gemini-1.5-pro",
+  TEXT: "gemini-2.0-flash",
+  PRO: "gemini-2.0-flash",
   IMAGE: "gemini-2.0-flash" 
 };
+
+/**
+ * Utility to strip markdown code blocks from AI strings
+ */
+function cleanJsonResponse(text: string) {
+  if (!text) return "";
+  return text.trim().replace(/^```json/, '').replace(/```$/, '').trim();
+}
 
 /**
  * Modern SDK uses ai.models.generateContent directly.
@@ -101,7 +109,7 @@ async function generateContent(params: any) {
   try {
     return await ai.models.generateContent(params);
   } catch (error: any) {
-    console.error("Gemini API Error:", error);
+    console.error(`Gemini API Error:`, error?.message || error);
     throw error;
   }
 }
@@ -160,6 +168,8 @@ router.post('/ai/chat', async (req, res) => {
                   id: { type: "string" },
                   type: { type: "string", enum: ["text", "shape", "image"] },
                   text: { type: "string" },
+                  imagePrompt: { type: "string" },
+                  shapeType: { type: "string", enum: ["rect", "circle", "triangle"] },
                   fontSize: { type: "number" },
                   fontFamily: { type: "string" },
                   color: { type: "string" },
@@ -178,39 +188,48 @@ router.post('/ai/chat', async (req, res) => {
       required: ["chatResponse", "action"]
     };
 
-    const systemPrompt = `You are "Edit Pro AI", a helpful, human-like creative design assistant. 
-    You help users create and edit posters on a canvas.
+    const systemPrompt = `You are "Edit Pro AI", a brilliant, witty, and human-like creative companion. 
+    Think of yourself as a mix between a professional art director and a friendly ChatGPT conversation.
     
-    Current Design Layout: ${JSON.stringify(canvasState || {})}
+    TONE & PERSONALITY:
+    - Warm, helpful, and slightly artistic.
+    - Use emojis occasionally but professionally.
+    - Be proactive! If a user asks for something, don't just do it—suggest a style that makes it pop.
+    
+    CAPABILITIES:
+    - You handle a design canvas. You can "create" new designs or "update" existing ones.
+    - Current Design Layout: ${JSON.stringify(canvasState || {})}
     
     GUIDELINES:
-    1. Be friendly, conversational, and encouraging.
-    2. Suggest creative improvements.
-    3. If the user wants to change the design, set action to "update" and provide the new posterData.
-    4. If creating from scratch, set action to "create".
-    5. posterData should contain the FULL set of elements for the final state.
-    6. Elements can be "text", "shape", or "image".
-    7. For text, specify fontSize, fontFamily, color, fontWeight.
-    8. Use relative positioning/sizing (numbers roughly based on a 1000x1000 canvas).
+    1. If the user wants to change the design, set action to "update" and provide the new posterData.
+    2. If creating from scratch, set action to "create".
+    3. posterData should contain the FULL set of elements for the final state.
+    4. Elements can be "text", "shape", or "image".
+    5. For "image" elements, you MUST provide an "imagePrompt". A high-quality image will be generated based on this prompt.
+    6. For "text", specify fontSize (pixels), fontFamily (e.g., 'Inter', 'Space Grotesk'), color (hex), fontWeight ('bold' or 'normal'), textAlign.
+    7. Use relative positioning/sizing (numbers roughly based on a 1000x1000 canvas).
+    8. ChatResponse should be your verbal response to the user.
     
-    Respond strictly in JSON matching the schema.`;
+    Always respond in strictly valid JSON matching the schema.`;
 
     const response = await generateContent({
-      model: MODELS.PRO, // Use Pro for complex layout reasoning
+      model: MODELS.TEXT,
       contents: messages.map((m: any) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }]
       })),
       config: {
         systemInstruction: systemPrompt,
-        responseMimeType: "application/json",
-        responseSchema: posterSchema as any
+        responseMimeType: "application/json"
       }
     });
 
-    const result = JSON.parse(response.text || "{}");
+    const resultText = response.text || "";
+    const cleaned = cleanJsonResponse(resultText);
+    const result = JSON.parse(cleaned || "{}");
     res.json(result);
   } catch (error) {
+    console.error("Chat API Error:", error);
     res.status(200).json({ chatResponse: "I'm having a small creative block. Mind trying again? 🎨", action: "none" });
   }
 });
@@ -233,7 +252,7 @@ router.post('/remove-bg', async (req, res) => {
   try {
     const base64Data = image.includes(',') ? image.split(',')[1] : image;
     const response = await generateContent({
-      model: MODELS.IMAGE,
+      model: MODELS.TEXT,
       contents: [
         { inlineData: { data: base64Data, mimeType: "image/png" } },
         { text: "Remove the background from this image. Output only the foreground object on a transparent or neutral background." }
@@ -299,17 +318,42 @@ router.post('/ai/suggestions', async (req, res) => {
     const base64Data = image.includes(',') ? image.split(',')[1] : image;
     const response = await generateContent({
       model: MODELS.TEXT,
-      contents: {
+      contents: [{
         parts: [
           { inlineData: { data: base64Data, mimeType: "image/png" } },
-          { text: "Suggest 3 creative editing improvements. Return JSON array of strings." }
+          { text: "Suggest 3 creative editing improvements for this image. Return a JSON array of strings ONLY." }
         ]
-      },
+      }],
       config: { responseMimeType: "application/json" }
     });
-    res.json({ suggestions: JSON.parse(response.text || "[]") });
+    const textResult = response.text || "";
+    const cleaned = cleanJsonResponse(textResult);
+    res.json({ suggestions: JSON.parse(cleaned || "[]") });
   } catch (error) {
     res.status(500).json({ error: "Analysis failed" });
+  }
+});
+
+router.post('/ai/detect-style', async (req, res) => {
+  const { image } = req.body;
+  try {
+    const base64Data = image.includes(',') ? image.split(',')[1] : image;
+    const response = await generateContent({
+      model: MODELS.TEXT,
+      contents: [{
+        parts: [
+          { inlineData: { data: base64Data, mimeType: "image/png" } },
+          { text: "Analyze the primary typography style in this image. Return a JSON object with: fontFamily (closest from ['Inter', 'Space Grotesk', 'Playfair Display', 'JetBrains Mono', 'Outfit']), fontSize (roughly in pixels for a 1000x1000 canvas), fontWeight ('bold' or 'normal'), color (hex code), and textAlign ('center', 'left', 'right')." }
+        ]
+      }],
+      config: { responseMimeType: "application/json" }
+    });
+    const textPayload = response.text || "";
+    const cleaned = cleanJsonResponse(textPayload);
+    res.json(JSON.parse(cleaned || "{}"));
+  } catch (error: any) {
+    console.error("Gemini API Error Detail:", error?.message || error);
+    res.status(500).json({ error: "Style analysis failed: " + (error?.message || "Unknown error") });
   }
 });
 
