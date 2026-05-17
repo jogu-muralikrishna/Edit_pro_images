@@ -52,6 +52,11 @@ const getFirestoreInstance = () => {
   }
 };
 
+const app = express();
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
 const router = Router();
 const JWT_SECRET = process.env.ANALYTICS_JWT_SECRET || 'secret-admin-key-2025';
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
@@ -91,8 +96,14 @@ const ai = new GoogleGenAI({
 const MODELS = {
   TEXT: "gemini-2.0-flash",
   PRO: "gemini-2.0-flash",
-  IMAGE: "gemini-2.0-flash" 
+  IMAGE: "gemini-2.0-flash",
+  FALLBACK: "gemini-3-flash-preview"
 };
+
+/**
+ * Utility for exponential backoff delay
+ */
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
  * Utility to strip markdown code blocks from AI strings
@@ -104,12 +115,30 @@ function cleanJsonResponse(text: string) {
 
 /**
  * Modern SDK uses ai.models.generateContent directly.
+ * Implements fallback and retry logic.
  */
-async function generateContent(params: any) {
+async function generateContent(params: any, attempt = 1): Promise<any> {
   try {
     return await ai.models.generateContent(params);
   } catch (error: any) {
-    console.error(`Gemini API Error:`, error?.message || error);
+    const isQuotaError = error?.message?.includes('429') || error?.message?.includes('RESOURCE_EXHAUSTED');
+    
+    if (isQuotaError && attempt <= 3) {
+      console.warn(`Gemini Quota Exceeded (Attempt ${attempt}). Retrying...`);
+      
+      // If primary model failed, try fallback model
+      if (params.model !== MODELS.FALLBACK) {
+        console.log(`Switching to fallback model: ${MODELS.FALLBACK}`);
+        return await generateContent({ ...params, model: MODELS.FALLBACK }, attempt + 1);
+      }
+      
+      // Exponential backoff: 2s, 4s, 8s
+      const waitTime = Math.pow(2, attempt) * 1000;
+      await delay(waitTime);
+      return await generateContent(params, attempt + 1);
+    }
+    
+    console.error(`Gemini API Error (Final):`, error?.message || error);
     throw error;
   }
 }
@@ -401,6 +430,8 @@ router.all('*', (req, res) => {
   res.status(404).json({ error: `Route ${req.method} ${req.url} not found on API router` });
 });
 
+app.use('/', router);
+
 export const apiRouter = router;
-export default router;
+export default app;
 
